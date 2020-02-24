@@ -18,12 +18,16 @@ func TestScanner(t *testing.T) {
 		{"AFTER", lexer.AFTER, "AFTER"},
 		{"DOWNLOAD", lexer.DOWNLOAD, "DOWNLOAD"},
 		{"FROM", lexer.FROM, "FROM"},
+		{"REFRESH", lexer.REFRESH, "REFRESH"},
+		{"TOKEN", lexer.TOKEN, "TOKEN"},
+		{"CERTIFICATE", lexer.CERTIFICATE, "CERTIFICATE"},
 		{"    ", lexer.WS, "    "},
 		{"\"foo\"", lexer.IDENT, "foo"},
 		{"\"foo", lexer.BADSTRING, "foo"},
 		{"\"12\"", lexer.IDENT, "12"},
 		{"{\"foo\":\"bar\"}", lexer.IDENT, "{\"foo\":\"bar\"}"},
 		{"", lexer.EOF, ""},
+		{"&", lexer.AMPERSAND, "&"},
 	}
 	for _, c := range tests {
 		scanner := lexer.NewScanner(strings.NewReader(c.query))

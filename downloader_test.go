@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cavaliercoder/grab/grabtest"
 	"github.com/jerminb/nestor"
+	"github.com/jerminb/nestor/testserver"
 )
 
 func fileCount(path string) (int, error) {
@@ -31,7 +31,7 @@ func TestDownload(t *testing.T) {
 	nanos := now.UnixNano()
 	filename := fmt.Sprintf("/tmp/nestor_tests/%d", nanos)
 	defer os.Remove(filename)
-	grabtest.WithTestServer(t, func(url string) {
+	testserver.WithTestServer(t, func(url string) {
 		err := d.Download(filename, url)
 		if err != nil {
 			t.Fatalf("expected no error. got %v", err)
@@ -48,7 +48,7 @@ func TestExecute_Downloader(t *testing.T) {
 	nanos := now.UnixNano()
 	filename := fmt.Sprintf("/tmp/nestor_tests/%d", nanos)
 	defer os.Remove(filename)
-	grabtest.WithTestServer(t, func(url string) {
+	testserver.WithTestServer(t, func(url string) {
 		_, err := d.Execute(filename, url)
 		if err != nil {
 			t.Fatalf("expected no error. got %v", err)
@@ -67,7 +67,7 @@ func TestDownloadBatch(t *testing.T) {
 	filename := fmt.Sprintf("/tmp/nestor_tests/batch%d/", nanos)
 	os.MkdirAll(filename, os.ModePerm)
 	defer os.RemoveAll(filename)
-	grabtest.WithTestServer(t, func(url string) {
+	testserver.WithTestServer(t, func(url string) {
 		urls := make([]string, tests)
 		for i := 0; i < len(urls); i++ {
 			urls[i] = url + fmt.Sprintf("/request_%d?", i+1)

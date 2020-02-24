@@ -3,17 +3,25 @@ package main
 import (
 	"fmt"
 
-	"github.com/jerminb/nestor"
+	/*"github.com/jerminb/nestor"
 	log "github.com/sirupsen/logrus"
-	gock "gopkg.in/h2non/gock.v1"
+	gock "gopkg.in/h2non/gock.v1"*/
+
+	"time"
+
+	"github.com/jasonlvhit/gocron"
 )
 
 func task() {
 	fmt.Println("Task running")
 }
 
+func bgcron() {
+	<-gocron.Start()
+}
+
 func main() {
-	log.SetLevel(log.DebugLevel)
+	/*log.SetLevel(log.DebugLevel)
 	defer gock.Off()
 	gock.New("http://server.com").
 		Get("/bar").
@@ -29,5 +37,11 @@ func main() {
 	r := <-responseChan
 	if r.Error != nil {
 		log.Errorf("expected nil. got %v", r.Error)
-	}
+	}*/
+	gocron.Every(1).Second().Do(task)
+	go bgcron()
+	fmt.Println("first run after start")
+	time.Sleep(2 * time.Second)
+	fmt.Println("second run after start")
+
 }

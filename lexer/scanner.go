@@ -67,6 +67,12 @@ func (s *Scanner) Scan() (tok Token, lit string) {
 		return COMMA, string(ch)
 	case ';':
 		return SEMICOLON, string(ch)
+	case '&':
+		return AMPERSAND, string(ch)
+	case '(':
+		return LEFTPARENTHESIS, string(ch)
+	case ')':
+		return RIGHTPARENTHESIS, string(ch)
 	case '+':
 		return ADD, ""
 	case '-':
@@ -241,6 +247,12 @@ func (s *Scanner) scanIdent() (tok Token, lit string) {
 		return SQLEXECUTE, buf.String()
 	case "INTO":
 		return INTO, buf.String()
+	case "REFRESH":
+		return REFRESH, buf.String()
+	case "TOKEN":
+		return TOKEN, buf.String()
+	case "CERTIFICATE":
+		return CERTIFICATE, buf.String()
 	}
 
 	// Otherwise return as a regular identifier.

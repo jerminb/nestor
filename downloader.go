@@ -43,7 +43,7 @@ Loop:
 		case <-t.C:
 			log.Debugf("  transferred %v / %v bytes (%.2f%%)",
 				resp.BytesComplete(),
-				resp.Size(),
+				resp.Size,
 				100*resp.Progress())
 
 		case <-resp.Done:
@@ -129,10 +129,6 @@ func (d *Downloader) isComplete(resp *grab.Response) error {
 	if resp.Err() == nil {
 		if resp.Filename == "" {
 			return fmt.Errorf("Response.Filename is empty")
-		}
-
-		if resp.Size() == 0 {
-			return fmt.Errorf("Response.Size is zero")
 		}
 	}
 	return nil

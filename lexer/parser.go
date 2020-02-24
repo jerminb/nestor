@@ -51,6 +51,15 @@ func (p *Parser) scanIgnoreWhitespace() (tok Token, lit string) {
 	return
 }
 
+func (p *Parser) scanAmpersand() bool {
+	tok, _ := p.scanIgnoreWhitespace()
+	if tok != AMPERSAND {
+		p.unscan()
+		return false
+	}
+	return true
+}
+
 // parsePollStatement parses a POLL statement.
 func (p *Parser) parsePollStatement() (*PollStatement, error) {
 	stmt := &PollStatement{}
@@ -87,7 +96,7 @@ func (p *Parser) parsePollStatement() (*PollStatement, error) {
 		if tokafter != IDENT {
 			return nil, newParseError(Tokstr(tokafter, litafter), []string{"InitialWaitTime"})
 		}
-		stmt.InitalWaitTime = litafter
+		stmt.InitialWaitTime = litafter
 	} else {
 		p.unscan()
 	}
@@ -103,6 +112,8 @@ func (p *Parser) parsePollStatement() (*PollStatement, error) {
 	if tok, lit := p.scanIgnoreWhitespace(); tok != TIMES {
 		return nil, newParseError(Tokstr(tok, lit), []string{"TIMES"})
 	}
+
+	stmt.IsBackground = p.scanAmpersand()
 
 	// Return the successfully parsed statement.
 	return stmt, nil
@@ -147,6 +158,8 @@ func (p *Parser) parseDownloadStatement() (*DownloadStatement, error) {
 	}
 	stmt.FilePath = lit
 
+	stmt.IsBackground = p.scanAmpersand()
+
 	// Return the successfully parsed statement.
 	return stmt, nil
 }
@@ -156,7 +169,7 @@ func (p *Parser) parseSQLExecuteStatement() (*SQLExecuteStatement, error) {
 	stmt := &SQLExecuteStatement{}
 	p.unscan()
 
-	// First token should be a "DOWNLOAD" keyword.
+	// First token should be a "SQLEXECUTE" keyword.
 	if tok, lit := p.scanIgnoreWhitespace(); tok != SQLEXECUTE {
 		return nil, newParseError(Tokstr(tok, lit), []string{"SQLEXECUTE"})
 	}
@@ -189,6 +202,53 @@ func (p *Parser) parseSQLExecuteStatement() (*SQLExecuteStatement, error) {
 	return stmt, nil
 }
 
+// parseRefresherStatement parses a RefreshStatement statement.
+func (p *Parser) parseRefresherStatement() (*RefreshStatement, error) {
+	stmt := &RefreshStatement{}
+	p.unscan()
+
+	// First token should be a "REFRESH" keyword.
+	if tok, lit := p.scanIgnoreWhitespace(); tok != REFRESH {
+		return nil, newParseError(Tokstr(tok, lit), []string{"REFRESH"})
+	}
+
+	// Next we should read TOKEN or CERTIFICATE.
+	artTok, artLit := p.scanIgnoreWhitespace()
+	if artTok != TOKEN && artTok != CERTIFICATE {
+		return nil, newParseError(Tokstr(artTok, artLit), []string{"TOKEN", "CERTIFICATE"})
+	}
+	stmt.Artifact = Tokstr(artTok, artLit)
+
+	// Next we should read FROM.
+	if tok, lit := p.scanIgnoreWhitespace(); tok != FROM {
+		return nil, newParseError(Tokstr(tok, lit), []string{"FROM"})
+	}
+
+	// Next we should read a URL.
+	tok, lit := p.scanIgnoreWhitespace()
+	if tok != IDENT {
+		return nil, newParseError(Tokstr(tok, lit), []string{"PATH"})
+	}
+	stmt.Path = lit
+
+	// Next we should see the "EVERY" keyword.
+	if tok, lit := p.scanIgnoreWhitespace(); tok != EVERY {
+		return nil, newParseError(Tokstr(tok, lit), []string{"EVERY"})
+	}
+
+	// Next we should read polling interval.
+	tok, lit = p.scanIgnoreWhitespace()
+	if tok != IDENT {
+		return nil, newParseError(Tokstr(tok, lit), []string{"PollingInterval"})
+	}
+	stmt.Interval = lit
+
+	stmt.IsBackground = p.scanAmpersand()
+
+	// Return the successfully parsed statement.
+	return stmt, nil
+}
+
 // ParseStatement parses an Gorsian string and returns a Statement AST object.
 func (p *Parser) ParseStatement() (Statement, error) {
 	// Inspect the first token.
@@ -200,8 +260,12 @@ func (p *Parser) ParseStatement() (Statement, error) {
 		return p.parseDownloadStatement()
 	case SQLEXECUTE:
 		return p.parseSQLExecuteStatement()
+	case REFRESH:
+		return p.parseRefresherStatement()
+	case LEFTPARENTHESIS:
+		return p.ParseQuery()
 	default:
-		return nil, newParseError(Tokstr(tok, lit), []string{"POLL", "DOWNLOAD", "SQLEXECUTE"})
+		return nil, newParseError(Tokstr(tok, lit), []string{"POLL", "DOWNLOAD", "SQLEXECUTE", "QUERY"})
 	}
 }
 
@@ -210,8 +274,13 @@ func (p *Parser) ParseQuery() (*Query, error) {
 	var statements Statements
 	semi := true
 	for {
-		if tok, lit := p.scanIgnoreWhitespace(); tok == EOF {
-			return &Query{Statements: statements}, nil
+		if tok, lit := p.scanIgnoreWhitespace(); tok == EOF || tok == RIGHTPARENTHESIS {
+			return &Query{
+				BaseStatement{
+					p.scanAmpersand(),
+				},
+				statements,
+			}, nil
 		} else if tok == SEMICOLON {
 			semi = true
 		} else {

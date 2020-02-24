@@ -1,56 +1,34 @@
 package nestor_test
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cavaliercoder/grab/grabtest"
 	"github.com/jerminb/nestor"
 	"github.com/jerminb/nestor/lexer"
+	"github.com/jerminb/nestor/testserver"
 )
 
 func TestExecutionPoller(t *testing.T) {
-	counter := 0
 	maxErrorCount := 3
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		if counter < (maxErrorCount - 1) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		s := fmt.Sprintf(`poll "%s" every "1s" after "10m" "%d" times`, url, maxErrorCount)
+		stmt, err := lexer.NewParser(strings.NewReader(s)).ParseStatement()
 		if err != nil {
-			t.Error(err)
+			t.Errorf("expected nil . got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	s := fmt.Sprintf(`poll "%s" every "2s" after "2s" "%d" times`, backend.URL, maxErrorCount)
-	stmt, err := lexer.NewParser(strings.NewReader(s)).ParseStatement()
-	if err != nil {
-		t.Errorf("expected nil . got %v", err)
-	}
-	res, err := nestor.ExecuteFromStatement(stmt)
-	if err != nil {
-		t.Errorf("expected nil . got %v", err)
-	}
-	if res == nil {
-		t.Fatalf("expected result. got nil")
-	}
+		res, err := nestor.ExecuteFromStatement(stmt)
+		if err != nil {
+			t.Fatalf("expected no error. got %v", err)
+		}
+		if res == nil {
+			t.Fatalf("expected result. got nil")
+		}
+	},
+		testserver.MaxErrorCount(maxErrorCount-1))
 }
 
 func TestExecutionPollerNegative(t *testing.T) {
@@ -79,7 +57,7 @@ func TestExecutionDownloader(t *testing.T) {
 	nanos := now.UnixNano()
 	filename := fmt.Sprintf("/tmp/nestor_tests/%d", nanos)
 	defer os.Remove(filename)
-	grabtest.WithTestServer(t, func(url string) {
+	testserver.WithTestServer(t, func(url string) {
 		s := fmt.Sprintf(`download from "%s" save to "%s"`, url, filename)
 		stmt, err := lexer.NewParser(strings.NewReader(s)).ParseStatement()
 		if err != nil {

@@ -1,275 +1,152 @@
 package nestor_test
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/jerminb/nestor"
-	gock "gopkg.in/h2non/gock.v1"
+	"github.com/jerminb/nestor/testserver"
 )
 
 func TestPollee(t *testing.T) {
-	defer gock.Off()
-	gock.New("http://foo.com").
-		Get("/bar").
-		Reply(200).
-		JSON(map[string]string{"foo": "bar"})
-	responseChan := make(chan *nestor.PollResponse)
-	p, err := nestor.NewPollee("http://foo.com/", "GET", 1, "200 OK", responseChan)
-	if err != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	go p.Poll()
-	r := <-responseChan
-	if r.Error != nil {
-		t.Fatalf("expected nil. got %v", r.Error)
-	}
-	if r.ResponseStatus != "200 OK" {
-		t.Fatalf("expected status 200 OK got %s", r.ResponseStatus)
-	}
+	testserver.WithTestServer(t, func(url string) {
+		responseChan := make(chan *nestor.PollResponse)
+		p, err := nestor.NewPollee(url, "GET", 1, "200 OK", responseChan)
+		if err != nil {
+			t.Fatalf("expected nil. got %v", err)
+		}
+		go p.Poll()
+		r := <-responseChan
+		if r.Error != nil {
+			t.Fatalf("expected nil. got %v", r.Error)
+		}
+		if r.ResponseStatus != "200 OK" {
+			t.Fatalf("expected status 200 OK got %s", r.ResponseStatus)
+		}
+	})
 }
 
 func TestFailedPollee(t *testing.T) {
-	defer gock.Off()
-	gock.New("http://foo.com").
-		Get("/bar").
-		Reply(200).
-		JSON(map[string]string{"foo": "bar"})
-	responseChan := make(chan *nestor.PollResponse)
-	p, err := nestor.NewPollee("http://bar.br/", "GET", 1, "200 OK", responseChan)
-	if err != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	go p.Poll()
-	r := <-responseChan
-	if r.Error == nil {
-		t.Fatalf("expected error. got nil")
-	}
+	testserver.WithTestServer(t, func(url string) {
+		responseChan := make(chan *nestor.PollResponse)
+		p, err := nestor.NewPollee(url, "GET", 1, "200 OK", responseChan)
+		if err != nil {
+			t.Fatalf("expected nil. got %v", err)
+		}
+		go p.Poll()
+		r := <-responseChan
+		if r.ResponseStatus == "200 OK" {
+			t.Fatalf("expected error. got %s", r.ResponseStatus)
+		}
+	},
+		testserver.MaxErrorCount(1))
 }
 
 func TestClientTimeout(t *testing.T) {
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		time.Sleep(6000 * time.Millisecond)
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		responseChan := make(chan *nestor.PollResponse)
+		p, err := nestor.NewPollee(url, "GET", 1, "200 OK", responseChan)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("expected nil. got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
+		go p.Poll()
+		r := <-responseChan
+		if r.Error == nil {
+			t.Fatalf("expected error. got nil")
+		}
+	},
+		testserver.MaxErrorCount(1),
+		testserver.TimeToFirstByte(6000*time.Millisecond))
 
-	//backend := httptest.NewServer(http.TimeoutHandler(handlerFunc, 20*time.Millisecond, "server timeout"))
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	responseChan := make(chan *nestor.PollResponse)
-	p, err := nestor.NewPollee(url, "GET", 1, "200 OK", responseChan)
-	if err != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	go p.Poll()
-	r := <-responseChan
-	if r.Error == nil {
-		t.Fatalf("expected error. got nil")
-	}
 }
 func TestLessThanMaxErrorCount(t *testing.T) {
-	counter := 0
 	maxErrorCount := 2
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		if counter < (maxErrorCount - 1) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		responseChan := make(chan *nestor.PollResponse)
+		p, err := nestor.NewPollee(url, "GET", maxErrorCount, "200 OK", responseChan)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("expected nil. got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-
-	//backend := httptest.NewServer(http.TimeoutHandler(handlerFunc, 20*time.Millisecond, "server timeout"))
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	responseChan := make(chan *nestor.PollResponse)
-	p, err := nestor.NewPollee(url, "GET", maxErrorCount, "200 OK", responseChan)
-	if err != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	go p.Poll()
-	r := <-responseChan
-	go p.Poll()
-	r = <-responseChan
-	if r.Error != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	if r.ResponseStatus != "200 OK" {
-		t.Fatalf("expected status 200 OK got %s", r.ResponseStatus)
-	}
+		go p.Poll()
+		r := <-responseChan
+		go p.Poll()
+		r = <-responseChan
+		if r.Error != nil {
+			t.Fatalf("expected nil. got %v", err)
+		}
+		if r.ResponseStatus != "200 OK" {
+			t.Fatalf("expected status 200 OK got %s", r.ResponseStatus)
+		}
+	},
+		testserver.MaxErrorCount(maxErrorCount-1))
 }
 
 func TestMoreThanMaxErrorCount(t *testing.T) {
-	counter := 0
 	maxErrorCount := 1
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		if counter < (maxErrorCount) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		responseChan := make(chan *nestor.PollResponse)
+		p, err := nestor.NewPollee(url, "GET", maxErrorCount, "200 OK", responseChan)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("expected nil. got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-
-	//backend := httptest.NewServer(http.TimeoutHandler(handlerFunc, 20*time.Millisecond, "server timeout"))
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	responseChan := make(chan *nestor.PollResponse)
-	p, err := nestor.NewPollee(url, "GET", maxErrorCount, "200 OK", responseChan)
-	if err != nil {
-		t.Fatalf("expected nil. got %v", err)
-	}
-	go p.Poll()
-	r := <-responseChan
-	go p.Poll()
-	r = <-responseChan
-	if r.Error == nil {
-		t.Fatalf("expected error. got nil")
-	}
-	if r.Error != nestor.ErrorMaxCountExceeded {
-		t.Fatalf("expected ErrorMaxCountExceeded. got %v", r.Error)
-	}
+		go p.Poll()
+		r := <-responseChan
+		go p.Poll()
+		r = <-responseChan
+		if r.Error == nil {
+			t.Fatalf("expected error. got nil")
+		}
+		if r.Error != nestor.ErrorMaxCountExceeded {
+			t.Fatalf("expected ErrorMaxCountExceeded. got %v", r.Error)
+		}
+	},
+		testserver.MaxErrorCount(maxErrorCount))
 }
 
 func TestPoller(t *testing.T) {
-	counter := 0
 	maxErrorCount := 3
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		if counter < (maxErrorCount - 1) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		poller := nestor.NewPoller()
+		start := time.Now()
+		res, err := poller.Monitor(url, "GET", maxErrorCount, "200 OK", time.Second*1)
+		end := time.Now()
+		elapsed := end.Sub(start)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("expected no error. got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-
-	//backend := httptest.NewServer(http.TimeoutHandler(handlerFunc, 20*time.Millisecond, "server timeout"))
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	poller := nestor.NewPoller()
-	start := time.Now()
-	res, err := poller.Monitor(url, "GET", maxErrorCount, "200 OK", time.Second*1)
-	end := time.Now()
-	elapsed := end.Sub(start)
-	if err != nil {
-		t.Fatalf("expected no error. got %v", err)
-	}
-	if !res {
-		t.Fatalf("expected success=true. got false")
-	}
-	if elapsed < time.Second*2 {
-		t.Fatalf("expected 10 seconds. got %v", elapsed)
-	}
+		if !res {
+			t.Fatalf("expected success=true. got false")
+		}
+		if elapsed < time.Second*2 {
+			t.Fatalf("expected 2 seconds. got %v", elapsed)
+		}
+	},
+		testserver.MaxErrorCount(maxErrorCount-1))
 }
 
 func TestPollerExecutablePositive(t *testing.T) {
-	counter := 0
 	maxErrorCount := 3
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
-		}
-
-		if counter < (maxErrorCount - 1) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
+	testserver.WithTestServer(t, func(url string) {
+		poller := nestor.NewPoller()
+		res, err := poller.Execute(url, "GET", maxErrorCount, "200 OK", time.Second*1)
 		if err != nil {
-			t.Error(err)
+			t.Fatalf("expected no error. got %v", err)
 		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	poller := nestor.NewPoller()
-	res, err := poller.Execute(url, "GET", maxErrorCount, "200 OK", time.Second*1)
-	if err != nil {
-		t.Fatalf("expected no error. got %v", err)
-	}
-	if res == nil {
-		t.Fatalf("expected result. got nil")
-	}
+		if res == nil {
+			t.Fatalf("expected result. got nil")
+		}
+	},
+		testserver.MaxErrorCount(maxErrorCount-1))
 }
 
 func TestPollerExecutableNegative(t *testing.T) {
-	counter := 0
 	maxErrorCount := 3
-	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		d := map[string]interface{}{
-			"bar": "bar",
-			"foo": "foo",
+	testserver.WithTestServer(t, func(url string) {
+		poller := nestor.NewPoller()
+		_, err := poller.Execute(url, "GET", maxErrorCount, "200 OK")
+		if err == nil {
+			t.Fatalf("expected error. got nil")
 		}
-
-		if counter < (maxErrorCount - 1) {
-			counter++
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		b, err := json.Marshal(d)
-		if err != nil {
-			t.Error(err)
-		}
-		io.WriteString(w, string(b))
-		w.WriteHeader(http.StatusOK)
-	})
-	backend := httptest.NewServer(http.HandlerFunc(handlerFunc))
-	url := backend.URL
-	poller := nestor.NewPoller()
-	_, err := poller.Execute(url, "GET", maxErrorCount, "200 OK")
-	if err == nil {
-		t.Fatalf("expected error. got nil")
-	}
+	},
+		testserver.MaxErrorCount(maxErrorCount))
 }

@@ -33,9 +33,12 @@ const (
 	BADESCAPE // \q
 
 	// Misc characters
-	ASTERISK  // *
-	COMMA     // ,
-	SEMICOLON // ;
+	ASTERISK         // *
+	COMMA            // ,
+	SEMICOLON        // ;
+	AMPERSAND        // &
+	LEFTPARENTHESIS  // (
+	RIGHTPARENTHESIS // )
 
 	// Keywords
 	POLL
@@ -48,6 +51,9 @@ const (
 	TIMES
 	SQLEXECUTE
 	INTO
+	REFRESH
+	TOKEN
+	CERTIFICATE
 )
 
 var tokens = [...]string{
@@ -70,21 +76,27 @@ var tokens = [...]string{
 	GT:       ">",
 	GTE:      ">=",
 
-	ASTERISK:  "*",
-	COMMA:     ",",
-	SEMICOLON: ";",
+	ASTERISK:         "*",
+	COMMA:            ",",
+	SEMICOLON:        ";",
+	AMPERSAND:        "&",
+	LEFTPARENTHESIS:  "(",
+	RIGHTPARENTHESIS: ")",
 
-	IDENT:      "IDENT",
-	POLL:       "POLL",
-	EVERY:      "EVERY",
-	AFTER:      "AFTER",
-	DOWNLOAD:   "DOWNLOAD",
-	FROM:       "FROM",
-	SAVE:       "SAVE",
-	TO:         "TO",
-	TIMES:      "TIMES",
-	SQLEXECUTE: "SQLEXECUTE",
-	INTO:       "INTO",
+	IDENT:       "IDENT",
+	POLL:        "POLL",
+	EVERY:       "EVERY",
+	AFTER:       "AFTER",
+	DOWNLOAD:    "DOWNLOAD",
+	FROM:        "FROM",
+	SAVE:        "SAVE",
+	TO:          "TO",
+	TIMES:       "TIMES",
+	SQLEXECUTE:  "SQLEXECUTE",
+	INTO:        "INTO",
+	REFRESH:     "REFRESH",
+	TOKEN:       "TOKEN",
+	CERTIFICATE: "CERTIFICATE",
 }
 
 // String returns the string representation of the token.
