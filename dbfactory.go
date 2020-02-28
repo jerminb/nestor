@@ -2,11 +2,8 @@ package nestor
 
 import (
 	"database/sql"
-	"fmt"
 	"regexp"
 	"strings"
-
-	vaultAPI "github.com/hashicorp/vault/api"
 )
 
 const (
@@ -30,7 +27,7 @@ type DBPropertyRetriever struct {
 	readFromVault        bool
 	vaultPasswordPath    string
 	vaultPasswordKeyName string
-	vaultRetriever       *vaultRetriever
+	vaultService         *VaultService
 }
 
 func cleanup(input string, characters string) string {
@@ -48,7 +45,7 @@ func (dbr *DBPropertyRetriever) GetPassword(connectionString string) string {
 		if dbr.vaultPasswordKeyName != "" {
 			keyName = dbr.vaultPasswordKeyName
 		}
-		val, err := dbr.vaultRetriever.getSecretFromPath(dbr.vaultPasswordPath, keyName)
+		val, err := dbr.vaultService.GetSecretFromPath(dbr.vaultPasswordPath, keyName)
 		if err != nil {
 			return ""
 		}
@@ -90,7 +87,7 @@ func NewDBPropertyRetriever() *DBPropertyRetriever {
 
 //NewDBPropertyRetrieverWithVault is the contructor for DBPropertyRetriever class with vault retriever
 func NewDBPropertyRetrieverWithVault(vaultURL string, vaultToken string, vaultPasswordPath string, vaultPasswordKeyName string) (*DBPropertyRetriever, error) {
-	vr, err := newVaultRetriever(vaultURL, vaultToken)
+	vr, err := NewVaultService(vaultURL, vaultToken)
 	if err != nil {
 		return nil, err
 	}
@@ -98,39 +95,6 @@ func NewDBPropertyRetrieverWithVault(vaultURL string, vaultToken string, vaultPa
 		readFromVault:        true,
 		vaultPasswordKeyName: vaultPasswordKeyName,
 		vaultPasswordPath:    vaultPasswordPath,
-		vaultRetriever:       vr,
-	}, nil
-}
-
-type vaultRetriever struct {
-	client *vaultAPI.Client
-}
-
-func (vr *vaultRetriever) getSecretFromPath(path string, keyName string) (interface{}, error) {
-	secretValues, err := vr.client.Logical().Read(path)
-	if err != nil {
-		return nil, err
-	}
-	if secretValues == nil {
-		return nil, fmt.Errorf("value for keyname %s under path %s not found", keyName, path)
-	}
-	for propName, propValue := range secretValues.Data {
-		if propName == keyName {
-			return propValue, nil
-		}
-	}
-	return nil, fmt.Errorf("value for keyname %s not found", keyName)
-}
-
-func newVaultRetriever(url string, token string) (*vaultRetriever, error) {
-	cfg := vaultAPI.DefaultConfig()
-	cfg.Address = url
-	c, err := vaultAPI.NewClient(cfg)
-	if err != nil {
-		return nil, err
-	}
-	c.SetToken(token)
-	return &vaultRetriever{
-		client: c,
+		vaultService:         vr,
 	}, nil
 }

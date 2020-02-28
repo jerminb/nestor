@@ -10,7 +10,20 @@ import (
 
 func TestVaultConstructorPositive(t *testing.T) {
 	testserver.WithTestVaultServer(t, func(url string, listner net.Listener, token string) {
-		_, err := nestor.NewVaultService(url, token, false, "")
+		_, err := nestor.NewVaultService(url, token)
+		if err != nil {
+			t.Fatalf("expected nil. got %v", err)
+		}
+	})
+}
+
+func TestRenewTokenPositive(t *testing.T) {
+	testserver.WithTestVaultServer(t, func(url string, listner net.Listener, token string) {
+		vs, err := nestor.NewVaultService(url, token)
+		if err != nil {
+			t.Fatalf("expected nil. got %v", err)
+		}
+		err = vs.RenewSelfToken()
 		if err != nil {
 			t.Fatalf("expected nil. got %v", err)
 		}

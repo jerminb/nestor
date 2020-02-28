@@ -1,89 +1,65 @@
 package nestor
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	"errors"
 	"fmt"
-	"io/ioutil"
-	"net"
-	"net/http"
-	"time"
 
-	"github.com/hashicorp/vault/api"
+	vaultAPI "github.com/hashicorp/vault/api"
 )
 
-// VaultService is the main interface into the vault API
+var (
+	ErrRenewerNotRenewable = errors.New("secret is not renewable")
+)
+
+//VaultService is an abstraction around vault to expose the necessary functionality
+// without having to go through hashicorp apis
 type VaultService struct {
-	vaultURL string
-	// the vault client
-	client *api.Client
-	// skip tls verify
-	skipTLSVerify bool
+	client *vaultAPI.Client
 }
 
-// buildHTTPTransport constructs a http transport for the http client
-func buildHTTPTransport(skipTLSVerify bool, vaultCaFile string) (*http.Transport, error) {
-	// step: create the vault sidekick
-	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 10 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout: 10 * time.Second,
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: skipTLSVerify,
-		},
+//GetSecretFromPath returns secret from a given path with a given keyname
+func (vs *VaultService) GetSecretFromPath(path string, keyName string) (interface{}, error) {
+	secretValues, err := vs.client.Logical().Read(path)
+	if err != nil {
+		return nil, err
 	}
-
-	if vaultCaFile != "" {
-		caCert, err := ioutil.ReadFile(vaultCaFile)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read in the ca: %s, reason: %s", vaultCaFile, err)
+	if secretValues == nil {
+		return nil, fmt.Errorf("value for keyname %s under path %s not found", keyName, path)
+	}
+	for propName, propValue := range secretValues.Data {
+		if propName == keyName {
+			return propValue, nil
 		}
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-		transport.TLSClientConfig.RootCAs = caCertPool
 	}
-
-	return transport, nil
+	return nil, fmt.Errorf("value for keyname %s not found", keyName)
 }
 
-// newVaultClient creates and authenticates a vault client
-func newVaultClient(url string, token string, skipTLSVerify bool, vaultCaFile string) (*api.Client, error) {
-	var err error
-
-	config := api.DefaultConfig()
-	config.Address = url
-
-	config.HttpClient.Transport, err = buildHTTPTransport(skipTLSVerify, vaultCaFile)
+//RenewSelfToken renews client token
+func (vs *VaultService) RenewSelfToken() error {
+	selfSecret, err := vs.client.Auth().Token().LookupSelf()
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	// step: create the actual client
-	client, err := api.NewClient(config)
+	if !selfSecret.Auth.Renewable {
+		return ErrRenewerNotRenewable
+	}
+	_, err = vs.client.Auth().Token().RenewSelf(0)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	// step: set the token for the client
-	client.SetToken(token)
-	return client, nil
+	return nil
 }
 
-//NewVaultService is constructor for VaultService struct
-func NewVaultService(url string, token string, skipTLSVerify bool, vaultCaFile string) (*VaultService, error) {
-	var err error
-
-	// step: create the config for client
-	service := new(VaultService)
-	service.vaultURL = url
-	service.client, err = newVaultClient(url, token, skipTLSVerify, vaultCaFile)
-
+//NewVaultService is constructor for VaultService
+func NewVaultService(url string, token string) (*VaultService, error) {
+	cfg := vaultAPI.DefaultConfig()
+	cfg.Address = url
+	c, err := vaultAPI.NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	return service, nil
+	c.SetToken(token)
+	return &VaultService{
+		client: c,
+	}, nil
 }
