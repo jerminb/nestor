@@ -40,7 +40,7 @@ func (vs *VaultService) RenewSelfToken() error {
 	if err != nil {
 		return err
 	}
-	if !selfSecret.Auth.Renewable {
+	if !selfSecret.Renewable {
 		return ErrRenewerNotRenewable
 	}
 	_, err = vs.client.Auth().Token().RenewSelf(0)

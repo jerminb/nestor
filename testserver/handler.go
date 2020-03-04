@@ -200,5 +200,17 @@ func WithTestVaultServer(t *testing.T, f func(url string, listner net.Listener, 
 	if err != nil {
 		t.Fatalf("Error setting up secret: %v", err)
 	}
-	f(addr, listner, rootToken)
+	// This is just ridiculous. Renewable is a *bool and there is no easy way to pass
+	// a boolean pointer. https://stackoverflow.com/questions/32364027/reference-a-boolean-for-assignment-in-a-struct
+	trueBool := true
+	tokenCreateOpts := &vaultAPI.TokenCreateRequest{
+		Policies:  []string{"allsecrets"},
+		Renewable: &trueBool,
+		TTL:       "2m",
+	}
+	customToken, err := c.Auth().Token().Create(tokenCreateOpts)
+	if err != nil {
+		t.Fatalf("Error creating custom token: %v", err)
+	}
+	f(addr, listner, customToken.Auth.ClientToken)
 }
